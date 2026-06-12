@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using GymManagment.Application.Interfaces;
+using GymManagment.Application.Repositories;
 using GymManagment.Domain.DTO;
 using GymManagment.Domain.Models;
 using GymManagment.Infrastructure.Data;
@@ -9,27 +10,25 @@ namespace GymManagment.Application.Services
 {
     public class TrainerService : ITrainerService
     {
-        private readonly GymDbContext _context;
+        private readonly ITrainerRepository _trainerRepository;
         private readonly IMapper _mapper;           
 
-        public TrainerService(GymDbContext context, IMapper mapper)   
+        public TrainerService(ITrainerRepository trainerRepository, IMapper mapper)   
         {
-            _context = context;
+            _trainerRepository = trainerRepository;
             _mapper = mapper;
         }
 
         public List<TrainerDto> GetAllTrainers()
         {
-            var allTrainers = _context.Trainers.ToList();
+            var allTrainers = _trainerRepository.GetAllAsync().Result;
 
             return _mapper.Map<List<TrainerDto>>(allTrainers);
         }
 
         public TrainerDto? GetTrainerById(int id)
         {
-            var trainer = _context.Trainers.Find(id);
-            if (trainer == null)
-                return null;
+            var trainer = _trainerRepository.GetByIdAsync(id).Result;
 
             return _mapper.Map<TrainerDto>(trainer);
         }
@@ -44,38 +43,30 @@ namespace GymManagment.Application.Services
 
             var trainer = _mapper.Map<Trainer>(dto);
 
-            _context.Trainers.Add(trainer);
-            _context.SaveChanges();
-            return true;
+       _trainerRepository.AddAsync(trainer);
+            return _trainerRepository.SaveChangesAsync().Result;
         }
 
         public bool UpdateTrainer(int id, TrainerDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
                 return false;
-
-            var trainer = _context.Trainers.Find(id);
-            if (trainer == null)
-                return false;
-
             if (dto.Age < 20 || dto.Age > 70)
+                return false;
+            var trainer =_trainerRepository.GetByIdAsync(id).Result;
+            if (trainer == null)
                 return false;
 
             _mapper.Map(dto, trainer);
 
-            _context.SaveChanges();
-            return true;
+            _trainerRepository.UpdateAsync(trainer).Wait();
+            return _trainerRepository.SaveChangesAsync().Result;
         }
 
         public bool DeleteTrainer(int id)
         {
-            var trainer = _context.Trainers.Find(id);
-            if (trainer == null)
-                return false;
-
-            _context.Trainers.Remove(trainer);
-            _context.SaveChanges();
-            return true;
+           _trainerRepository.DeleteAsync(id);
+            return _trainerRepository.SaveChangesAsync().Result;
         }
     }
 }

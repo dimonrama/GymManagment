@@ -1,47 +1,38 @@
-﻿using GymManagment.Application.Interfaces;
+﻿using AutoMapper;
+using GymManagment.Application.Interfaces;
+using GymManagment.Application.Repositories;
 using GymManagment.Domain.DTO;
-using GymManagment.Infrastructure.Data;
 using GymManagment.Domain.Models;
+using GymManagment.Infrastructure.Data;
 
 namespace GymManagment.Application.Services
 {
     public class MemberService : IMemberService
     {
-        private readonly GymDbContext _context;
+                  
+        private readonly IMapper _mapper;
+        private readonly IMemberRepository _memberRepository;   
 
-        public MemberService(GymDbContext context)
+        public MemberService(
+            
+            IMapper mapper,
+            IMemberRepository memberRepository)  
         {
-            _context = context;
+            
+            _mapper = mapper;
+            _memberRepository = memberRepository;
         }
 
         public List<MemberDto> GetAllMembers()
         {
-            var members = _context.Members.ToList();
-
-            return members.Select(m => new MemberDto
-            {
-                Id = m.Id,
-                FullName = m.FullName,
-                Age = m.Age,
-                Email = m.Email,
-                TrainerId = m.TrainerId
-            }).ToList();
+            var members = _memberRepository.GetAllAsync().Result;  
+            return _mapper.Map<List<MemberDto>>(members);
         }
 
         public MemberDto? GetMemberById(int id)
         {
-            var member = _context.Members.Find(id);
-            if (member == null)
-                return null;
-
-            return new MemberDto
-            {
-                Id = member.Id,
-                FullName = member.FullName,
-                Age = member.Age,
-                Email = member.Email,
-                TrainerId = member.TrainerId
-            };
+            var member = _memberRepository.GetByIdAsync(id);
+            return _mapper.Map<MemberDto>(member);
         }
 
         public bool CreateMember(MemberDto dto)
@@ -51,18 +42,14 @@ namespace GymManagment.Application.Services
 
             if (dto.Age < 14 || dto.Age > 80)
                 return false;
+            if (_memberRepository.IsEmailExistsAsync(dto.Email).Result)
+                return false;
 
-            var member = new Member
-            {
-                FullName = dto.FullName,
-                Age = dto.Age,
-                Email = dto.Email,
-                TrainerId = null
-            };
+            var member = _mapper.Map<Member>(dto);
 
-            _context.Members.Add(member);
-            _context.SaveChanges();
-            return true;
+            _memberRepository.AddAsync(member).Wait();
+            _memberRepository.SaveChangesAsync();
+            return _memberRepository.SaveChangesAsync().Result;
         }
 
         public bool UpdateMember(int id, MemberDto dto)
@@ -70,31 +57,24 @@ namespace GymManagment.Application.Services
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
                 return false;
 
-            var member = _context.Members.Find(id);
-            if (member == null)
-                return false;
-
             if (dto.Age < 14 || dto.Age > 80)
                 return false;
 
-            member.FullName = dto.FullName;
-            member.Age = dto.Age;
-            member.Email = dto.Email;
-            member.TrainerId = dto.TrainerId;
+            var member = _memberRepository.GetByIdAsync(id).Result;
+            if (member == null)
+                return false;
+;
 
-            _context.SaveChanges();
-            return true;
+        _mapper.Map(dto,member);
+
+            _memberRepository.UpdateAsync(member).Wait();
+            return _memberRepository.SaveChangesAsync().Result;
         }
 
         public bool DeleteMember(int id)
-        {
-            var member = _context.Members.Find(id);
-            if (member == null)
-                return false;
-
-            _context.Members.Remove(member);
-            _context.SaveChanges();
-            return true;
+        { 
+            _memberRepository.DeleteAsync(id).Wait();
+            return _memberRepository.SaveChangesAsync().Result;
         }
     }
 }
