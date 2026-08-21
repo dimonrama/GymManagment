@@ -2,71 +2,111 @@
 using GymManagment.Application.Interfaces;
 using GymManagment.Application.Repositories;
 using GymManagment.Domain.DTO;
+using GymManagment.Domain.Common;
 using GymManagment.Domain.Models;
-using GymManagment.Infrastructure.Data;
-using System.Collections.Generic;
+using Microsoft.Extensions.Caching.Memory;
+
 
 namespace GymManagment.Application.Services
 {
     public class TrainerService : ITrainerService
     {
         private readonly ITrainerRepository _trainerRepository;
-        private readonly IMapper _mapper;           
+        private readonly IMapper _mapper;
+        private readonly IMemoryCache _memoryCache;
+        private static int _cacheVersion = 1;
 
-        public TrainerService(ITrainerRepository trainerRepository, IMapper mapper)   
+        public TrainerService(ITrainerRepository trainerRepository, IMapper mapper, IMemoryCache memoryCache)   
         {
             _trainerRepository = trainerRepository;
             _mapper = mapper;
+            _memoryCache = memoryCache;
         }
 
-        public List<TrainerDto> GetAllTrainers()
+        public async Task<PagedResult<TrainerDto>> GetAllTrainersAsync(int page)
         {
-            var allTrainers = _trainerRepository.GetAllAsync().Result;
+            string cacheKey = $"trainers_v{_cacheVersion}_page_{page}";
+            
 
-            return _mapper.Map<List<TrainerDto>>(allTrainers);
+            var result = await _memoryCache.GetOrCreateAsync(cacheKey, async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+                var trainers = await _trainerRepository.GetAllAsync(page);
+                return _mapper.Map<PagedResult<TrainerDto>>(trainers);
+            });
+
+            return result;
+        
         }
 
-        public TrainerDto? GetTrainerById(int id)
+        public async Task<TrainerDto?> GetTrainerByIdAsync(int id)
         {
-            var trainer = _trainerRepository.GetByIdAsync(id).Result;
+            var trainer = await _trainerRepository.GetByIdAsync(id);
 
-            return _mapper.Map<TrainerDto>(trainer);
+            return  _mapper.Map<TrainerDto>(trainer);
         }
 
-        public bool CreateTrainer(TrainerDto dto)
+        public async Task<Result> CreateTrainerAsync(TrainerDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
-                return false;
+                return Result.Fail("Переданы пустые значения", Result.ErrorTypes.ValidationError);
 
             if (dto.Age < 20 || dto.Age > 70)
-                return false;
+                return Result.Fail("Возраст тренера указан неверно", Result.ErrorTypes.ValidationError);
+            
 
             var trainer = _mapper.Map<Trainer>(dto);
 
-       _trainerRepository.AddAsync(trainer);
-            return _trainerRepository.SaveChangesAsync().Result;
+               await _trainerRepository.AddAsync(trainer);
+            var succes = await _trainerRepository.SaveChangesAsync();
+            if (succes == false)
+            {
+                return Result.Fail("Не удалось создать тренера", Result.ErrorTypes.ServerError);
+            }
+            _cacheVersion++;
+            return Result.Ok();
         }
 
-        public bool UpdateTrainer(int id, TrainerDto dto)
+        public async Task<Result> UpdateTrainerAsync(int id, TrainerDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
-                return false;
+                return Result.Fail("Переданы пустые значения", Result.ErrorTypes.ValidationError);
             if (dto.Age < 20 || dto.Age > 70)
-                return false;
-            var trainer =_trainerRepository.GetByIdAsync(id).Result;
+                return Result.Fail("Возраст тренера указан неверно", Result.ErrorTypes.ValidationError);
+            var trainer = await _trainerRepository.GetByIdTrackedAsync(id);
             if (trainer == null)
-                return false;
+                return Result.Fail($"Тренер с ID:{id} не найден", Result.ErrorTypes.NotFound);
 
             _mapper.Map(dto, trainer);
 
-            _trainerRepository.UpdateAsync(trainer).Wait();
-            return _trainerRepository.SaveChangesAsync().Result;
+
+            var succes = await _trainerRepository.SaveChangesAsync();
+            if (succes == false)
+            {
+                return Result.Fail("Не удалось обновить  тренера", Result.ErrorTypes.ServerError);
+            }
+            _cacheVersion++;
+            return Result.Ok();
         }
 
-        public bool DeleteTrainer(int id)
+        public async Task<Result> DeleteTrainerAsync(int id)
         {
-           _trainerRepository.DeleteAsync(id);
-            return _trainerRepository.SaveChangesAsync().Result;
+            var trainer = await _trainerRepository.GetByIdAsync(id);
+            if (trainer == null)
+            {
+                return Result.Fail($"Тренер с ID:{id} не найден", Result.ErrorTypes.NotFound);
+            }
+            var hasActiveMembers= await _trainerRepository.HasActiveMembersAsync(id);
+            if (hasActiveMembers == true) { 
+          
+                return Result.Fail("Невозможно удалить тренера с активными клиентами", Result.ErrorTypes.Conflict); }
+           await _trainerRepository.DeleteAsync(id);
+            var succes=  await _trainerRepository.SaveChangesAsync();
+            if (succes == false) {
+                return Result.Fail("Не удалось удалить тренера", Result.ErrorTypes.ServerError);
+            }
+            _cacheVersion++;
+            return Result.Ok();
         }
     }
 }

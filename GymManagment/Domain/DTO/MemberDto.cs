@@ -1,5 +1,4 @@
-﻿using GymManagment.Domain.Models;
- using GymManagment.Infrastructure.Data;
+﻿
 using System.ComponentModel.DataAnnotations;
 
 namespace GymManagment.Domain.DTO

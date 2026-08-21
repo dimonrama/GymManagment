@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using GymManagment.Application.Interfaces;
 using GymManagment.Application.Repositories;
+using GymManagment.Domain.Common;
 using GymManagment.Domain.DTO;
 using GymManagment.Domain.Models;
-using GymManagment.Infrastructure.Data;
+
+
 
 namespace GymManagment.Application.Services
 {
@@ -23,58 +25,83 @@ namespace GymManagment.Application.Services
             _memberRepository = memberRepository;
         }
 
-        public List<MemberDto> GetAllMembers()
+        public async Task<PagedResult<MemberDto>> GetAllMembersAsync(int page, int? trainerId)
         {
-            var members = _memberRepository.GetAllAsync().Result;  
-            return _mapper.Map<List<MemberDto>>(members);
+            var pagedMembers = await _memberRepository.GetAllAsync(page, trainerId);
+            return _mapper.Map<PagedResult<MemberDto>>(pagedMembers);
         }
+       
 
-        public MemberDto? GetMemberById(int id)
+        public async Task<MemberDto?> GetMemberByIdAsync(int id)
         {
-            var member = _memberRepository.GetByIdAsync(id);
+            var member = await _memberRepository.GetByIdAsync(id);
+            if (member == null)
+                return null;
+
             return _mapper.Map<MemberDto>(member);
         }
 
-        public bool CreateMember(MemberDto dto)
+        public async Task<Result> CreateMemberAsync(MemberDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
-                return false;
+                return Result.Fail("Переданы пустые значения", Result.ErrorTypes.ValidationError) ;
 
             if (dto.Age < 14 || dto.Age > 80)
-                return false;
-            if (_memberRepository.IsEmailExistsAsync(dto.Email).Result)
-                return false;
+                return Result.Fail("Передан неправильный возраст", Result.ErrorTypes.ValidationError);
+            if (await _memberRepository.IsEmailExistsAsync(dto.Email))
+                return Result.Fail("Такая почта уже зарегистрированна", Result.ErrorTypes.Conflict);
 
-            var member = _mapper.Map<Member>(dto);
+            var member =  _mapper.Map<Member>(dto);
 
-            _memberRepository.AddAsync(member).Wait();
-            _memberRepository.SaveChangesAsync();
-            return _memberRepository.SaveChangesAsync().Result;
+            await _memberRepository.AddAsync(member);
+
+            var succes = await _memberRepository.SaveChangesAsync();
+            if (succes == false)
+            {
+                return Result.Fail("Не удалось создать клиента", Result.ErrorTypes.ServerError);
+            }
+            return Result.Ok();
         }
 
-        public bool UpdateMember(int id, MemberDto dto)
+        public async Task<Result> UpdateMemberAsync(int id, MemberDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.FullName))
-                return false;
+                return Result.Fail("Переданы пустые значения", Result.ErrorTypes.ValidationError);
 
             if (dto.Age < 14 || dto.Age > 80)
-                return false;
+                return Result.Fail("Передан неправильный возраст", Result.ErrorTypes.ValidationError);
 
-            var member = _memberRepository.GetByIdAsync(id).Result;
+            var member = await _memberRepository.GetByIdTrackedAsync(id);
             if (member == null)
-                return false;
-;
+                return Result.Fail("Клиент не найден", Result.ErrorTypes.NotFound);
 
-        _mapper.Map(dto,member);
+            _mapper.Map(dto,member);
 
-            _memberRepository.UpdateAsync(member).Wait();
-            return _memberRepository.SaveChangesAsync().Result;
+
+            var succes = await _memberRepository.SaveChangesAsync();
+            if (succes == false)
+            {
+                return Result.Fail("Не удалось обновить клиента", Result.ErrorTypes.ServerError);
+            }
+           
+            return Result.Ok();
         }
 
-        public bool DeleteMember(int id)
-        { 
-            _memberRepository.DeleteAsync(id).Wait();
-            return _memberRepository.SaveChangesAsync().Result;
+        public async  Task<Result> DeleteMemberAsync(int id)
+        {
+            var member = await _memberRepository.GetByIdAsync(id);
+            if (member == null)
+            {
+                return Result.Fail($"Клиент с ID:{id} не найден", Result.ErrorTypes.NotFound);
+            }
+           
+            await _memberRepository.DeleteAsync(id);
+            var succes = await _memberRepository.SaveChangesAsync();
+            if (succes == false)
+            {
+                return Result.Fail("Не удалось удалить клиента", Result.ErrorTypes.ServerError);
+            }
+            return Result.Ok();
         }
     }
 }

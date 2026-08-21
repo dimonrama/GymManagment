@@ -1,67 +1,106 @@
 ﻿using GymManagment.Application.Interfaces;
+using GymManagment.Domain.Common;
 using GymManagment.Domain.DTO;
-using GymManagment.Domain.Models;
-using GymManagment.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 namespace GymManagment.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-
     public class TrainersController : ControllerBase
     {
-    
         private readonly ITrainerService _trainerService;
+
         public TrainersController(ITrainerService trainerService)
         {
             _trainerService = trainerService;
         }
-        
+
         [HttpGet]
-        public IActionResult GetAll() {
-            var allTrainers = _trainerService.GetAllTrainers();
-            
-            return Ok(allTrainers);
+        [Authorize]
+        public async Task<IActionResult> GetAll([FromQuery] int page = 1)
+        {
+            var trainers = await _trainerService.GetAllTrainersAsync(page);
+            return Ok(trainers);
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(int id) {
-           
-            var trainer = _trainerService.GetTrainerById(id);
-            if (trainer == null) { return NotFound($"Тренер с id {id} не найден"); }
-            return Ok(trainer);
+        [Authorize]
+        public async Task<IActionResult> GetById(int id)
+        {
+            var trainer = await _trainerService.GetTrainerByIdAsync(id);
+            if (trainer == null)
+                return NotFound($"Тренер с ID {id} не найден");
 
+            return Ok(trainer);
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Create([FromBody] TrainerDto dto)
+        {
+            if (dto == null)
+                return BadRequest("Данные тренера не переданы");
 
-        public IActionResult Create([FromBody] TrainerDto dto) {
-            if (dto == null) { return BadRequest("Переданы пустые значения!"); }
-            bool success = _trainerService.CreateTrainer(dto);
-            if (!success) { return BadRequest("Не удалось создать тренера"); }
-            return Ok("Тренер успешно создан");
+            Result result = await _trainerService.CreateTrainerAsync(dto);
+
+            if (!result.Success)
+            {
+
+                if (result.ErrorType == Result.ErrorTypes.NotFound) return NotFound(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.Conflict) return Conflict(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ValidationError) return BadRequest(result.ErrorMessage);
+            }
+
+            return Ok();
         }
 
         [HttpPut("{id}")]
-
-        public IActionResult Update(int id, [FromBody] TrainerDto dto) {
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Update(int id, [FromBody] TrainerDto dto)
+        {
             if (dto == null)
-            {
                 return BadRequest("Данные не переданы");
+
+            Result result = await _trainerService.UpdateTrainerAsync(id, dto);
+
+            if (!result.Success)
+            {
+
+                if (result.ErrorType == Result.ErrorTypes.NotFound) return NotFound(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.Conflict) return Conflict(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ValidationError) return BadRequest(result.ErrorMessage);
             }
 
-            bool scs = _trainerService.UpdateTrainer(id, dto);
-            if (!scs) { return BadRequest("Не удалось обновить тренера"); };
-            return Ok("Тренер успешно обновлен");
+            return Ok();
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            Result resultOfDelete = await _trainerService.DeleteTrainerAsync(id);
+            if (!resultOfDelete.Success) { 
 
-        public IActionResult Delete(int id) { 
-        bool success = _trainerService.DeleteTrainer(id);
-            if (!success) { return BadRequest("Не удалось удалить тренера"); }
-            return NoContent();
+            if (resultOfDelete.ErrorType == Result.ErrorTypes.NotFound) return NotFound(resultOfDelete.ErrorMessage);
+
+            if (resultOfDelete.ErrorType == Result.ErrorTypes.Conflict) return Conflict(resultOfDelete.ErrorMessage);
+
+             if (resultOfDelete.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, resultOfDelete.ErrorMessage);
+
+                if (resultOfDelete.ErrorType == Result.ErrorTypes.ValidationError) return BadRequest(resultOfDelete.ErrorMessage);
+            }
+
+                return NoContent(); 
         }
-
     }
 }

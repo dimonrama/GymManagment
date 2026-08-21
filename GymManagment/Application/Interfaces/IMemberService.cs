@@ -1,13 +1,15 @@
-﻿using GymManagment.Domain.DTO;
+﻿using GymManagment.Domain.Common;
+using GymManagment.Domain.DTO;
+using System.Threading.Tasks;
 
 namespace GymManagment.Application.Interfaces
 {
     public interface IMemberService
     {
-        List<MemberDto> GetAllMembers();
-        MemberDto? GetMemberById(int id);
-        bool CreateMember(MemberDto dto);
-        bool UpdateMember(int id, MemberDto dto);
-        bool DeleteMember(int id);
+        Task<PagedResult<MemberDto>> GetAllMembersAsync(int page, int? trainerId);
+        Task<MemberDto?> GetMemberByIdAsync(int id);
+         Task<Result> CreateMemberAsync(MemberDto dto);
+        Task<Result> UpdateMemberAsync(int id, MemberDto dto);
+        Task<Result> DeleteMemberAsync(int id);
     }
 }

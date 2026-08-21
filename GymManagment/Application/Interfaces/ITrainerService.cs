@@ -1,15 +1,15 @@
-﻿using GymManagment.Domain.Models;
-using System.ComponentModel.DataAnnotations;
+﻿
 using GymManagment.Domain.DTO;
+using GymManagment.Domain.Common;
 
 namespace GymManagment.Application.Interfaces
 {
     public interface ITrainerService
     {
-        List<TrainerDto> GetAllTrainers();
-        TrainerDto? GetTrainerById(int id);
-        bool CreateTrainer(TrainerDto trainerDto);
-        bool UpdateTrainer(int id, TrainerDto trainerDto);
-        bool DeleteTrainer(int id);
+        Task<PagedResult<TrainerDto>> GetAllTrainersAsync(int page);
+        Task<TrainerDto?> GetTrainerByIdAsync(int id);
+        Task<Result> CreateTrainerAsync(TrainerDto trainerDto);
+        Task<Result> UpdateTrainerAsync(int id, TrainerDto trainerDto);
+        Task<Result> DeleteTrainerAsync(int id);
     }
 }

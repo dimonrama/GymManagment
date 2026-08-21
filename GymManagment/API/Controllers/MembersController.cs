@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using GymManagment.Infrastructure.Data;
-using GymManagment.Domain.Models;
+﻿using GymManagment.Application.Interfaces;
+using GymManagment.Domain.Common;
 using GymManagment.Domain.DTO;
-using GymManagment.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagment.API.Controllers
 {
@@ -11,62 +11,100 @@ namespace GymManagment.API.Controllers
     public class MembersController : ControllerBase
     {
         private readonly IMemberService _memberService;
-        public MembersController(IMemberService memberService) {
+
+        public MembersController(IMemberService memberService)
+        {
             _memberService = memberService;
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAll( [FromQuery] int? trainerId, [FromQuery] int page = 1)
         {
-            var members = _memberService.GetAllMembers();   
-
+            var members = await _memberService.GetAllMembersAsync(page, trainerId);
             return Ok(members);
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        [Authorize(Roles = "Admin,Trainer")]
+        public async Task<IActionResult> GetById(int id)
         {
-            var member = _memberService.GetMemberById(id);
+            var member = await _memberService.GetMemberByIdAsync(id);
             if (member == null)
                 return NotFound($"Клиент с ID {id} не найден");
+
             return Ok(member);
         }
 
         [HttpPost]
-        public IActionResult Create([FromBody] MemberDto dto)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Create([FromBody] MemberDto dto)
         {
             if (dto == null)
                 return BadRequest("Данные не переданы");
 
-            bool success = _memberService.CreateMember(dto);
+            Result result = await _memberService.CreateMemberAsync(dto);
 
-            if (!success)
-                return BadRequest("Не удалось создать клиента");
+            if (!result.Success)
+            {
 
-            return Ok("Клиент успешно создан");
+                if (result.ErrorType == Result.ErrorTypes.NotFound) return NotFound(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.Conflict) return Conflict(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, result.ErrorMessage);
+
+                if (result.ErrorType== Result.ErrorTypes.ValidationError) return BadRequest(result.ErrorMessage);
+            }
+
+            return Ok();
         }
 
         [HttpPut("{id}")]
-        public IActionResult Update(int id, [FromBody] MemberDto dto)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Update(int id, [FromBody] MemberDto dto)
         {
             if (dto == null)
                 return BadRequest("Данные не переданы");
 
-            bool success = _memberService.UpdateMember(id,dto);
+            Result result = await _memberService.UpdateMemberAsync(id, dto);
 
-            if (!success)
-                return BadRequest("Не удалось обновить клиента");
+            if (!result.Success)
+            {
 
-            return Ok("Клиент успешно обновлен");
+                if (result.ErrorType == Result.ErrorTypes.NotFound) return NotFound(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.Conflict) return Conflict(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ValidationError) return BadRequest(result.ErrorMessage);
+            }
+
+            return Ok();
         }
 
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int id)
         {
-            bool success = _memberService.DeleteMember(id);
-            if (!success)
-                return BadRequest("Не удалось удалить клиента");
+            Result result = await _memberService.DeleteMemberAsync(id);
+            if (!result.Success)
+            {
+
+                if (result.ErrorType == Result.ErrorTypes.NotFound) return NotFound(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.Conflict) return Conflict(result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ServerError) return StatusCode(500, result.ErrorMessage);
+
+                if (result.ErrorType == Result.ErrorTypes.ValidationError) return BadRequest(result.ErrorMessage);
+            }
+
+            
+
             return NoContent();
         }
+      
     }
 }

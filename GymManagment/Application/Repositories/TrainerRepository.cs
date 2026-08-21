@@ -1,24 +1,43 @@
-﻿using GymManagment.Application.Interfaces;
-using GymManagment.Application.Repositories;
-using GymManagment.Domain.DTO;
+﻿
+using GymManagment.Domain.Common;
 using GymManagment.Domain.Models;
 using GymManagment.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using TrainerEntity = GymManagment.Domain.Models.Trainer;
 namespace GymManagment.Application.Repositories
 {
-    public class TrainerRepository:IRepository<Trainer>, ITrainerRepository
+    public class TrainerRepository :  ITrainerRepository
     {
         private readonly GymDbContext _context;
 
         public TrainerRepository(GymDbContext context) { 
         _context = context;
         }
-        public async Task<List<TrainerEntity>> GetAllAsync()
+       
+           public async Task<PagedResult<Trainer>> GetAllAsync(int page)
         {
-            return await _context.Trainers.AsNoTracking().ToListAsync();
+            if (page < 1) page = 1;
+            const int pageSize = 10;
+            var totalCount = await _context.Trainers.CountAsync();
+            var pageResult = new PagedResult<Trainer>()
+            {
+                Items = await _context.Trainers
+                .AsNoTracking()
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                 .ToListAsync(),
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling((double)totalCount / pageSize),
+                CurrentPage = page,
+                PageSize = pageSize
+            };
+            return pageResult;
         }
-
+        
+        public async Task<Trainer?> GetByIdTrackedAsync (int id)
+        {
+           return await _context.Trainers.FirstOrDefaultAsync(t=>t.Id ==  id);
+        }
         public async Task<TrainerEntity?> GetByIdAsync(int id)
         {
             return await _context.Trainers.AsNoTracking().FirstOrDefaultAsync(t=>t.Id==id);
@@ -28,9 +47,10 @@ namespace GymManagment.Application.Repositories
             await _context.Trainers.AddAsync(entity);
         }
 
-        public async Task UpdateAsync(Trainer entity)
+        public  Task UpdateAsync(Trainer entity)
         {
             _context.Trainers.Update(entity);
+            return Task.CompletedTask;
         }
         public async Task DeleteAsync(int id)
         {
