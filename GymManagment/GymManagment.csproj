@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>88566650-b782-4f14-bc43-8b39c56f041d</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,15 +23,19 @@
  
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
  
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.27" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.27" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="8.0.27" />
+
+	  <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Migrations\" />
   </ItemGroup>
 
 </Project>
