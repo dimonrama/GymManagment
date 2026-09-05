@@ -1,6 +1,4 @@
-﻿namespace GymManagment.Domain.Models
+﻿public class Booking
 {
-    public class Booking
-    {
-    }
+    public string Id { get; set; }
 }
