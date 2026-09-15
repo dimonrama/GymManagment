@@ -18,7 +18,7 @@ namespace GymManagment.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Trainer")]
         public async Task<IActionResult> GetAll( [FromQuery] int? trainerId, [FromQuery] int page = 1)
         {
             var members = await _memberService.GetAllMembersAsync(page, trainerId);

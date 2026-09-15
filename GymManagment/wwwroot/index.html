@@ -1,0 +1,86 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>GymManagment — вход</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <div class="page-center">
+        <div class="login-card">
+            <div class="brand">GymManagment</div>
+            <div class="subtitle">Панель управления залом</div>
+
+            <form id="loginForm">
+                <label class="field">
+                    Username
+                    <input type="text" id="username" required autofocus>
+                </label>
+                <label class="field">
+                    Пароль
+                    <input type="password" id="password" required>
+                </label>
+                <button type="submit" class="primary">Войти</button>
+            </form>
+
+            <details class="debug">
+                <summary>Debug</summary>
+                <pre id="result">здесь появится ответ сервера</pre>
+            </details>
+        </div>
+    </div>
+
+    <script>
+        // Поля соответствуют LoginDto: Username + Password
+        const form = document.getElementById('loginForm');
+        const resultEl = document.getElementById('result');
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault(); // не даём странице перезагрузиться — сами решаем что делать
+
+            const button = form.querySelector('button');
+            button.disabled = true;
+            resultEl.textContent = 'отправляю запрос...';
+
+            const payload = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json().catch(() => null);
+
+                if (!response.ok) {
+                    resultEl.textContent =
+                        `Ошибка ${response.status} ${response.statusText}\n\n` +
+                        JSON.stringify(data, null, 2);
+                    return;
+                }
+
+                resultEl.textContent = 'Успех, перехожу на dashboard...';
+
+                if (data && data.accessToken) {
+                    localStorage.setItem('accessToken', data.accessToken);
+                }
+                if (data && data.refreshToken) {
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                }
+
+                window.location.href = '/dashboard.html';
+            } catch (err) {
+                resultEl.textContent = 'Сетевая ошибка: ' + err.message;
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+</html>

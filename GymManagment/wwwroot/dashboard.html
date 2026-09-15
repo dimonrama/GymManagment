@@ -1,0 +1,461 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>GymManagment — dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <div class="app-shell">
+
+        <div class="topbar">
+            <div class="brand">GymManagment</div>
+            <div style="display:flex; align-items:center; gap:14px;">
+                <span class="who" id="whoAmI"></span>
+                <button class="ghost" id="logoutBtn">Выйти</button>
+            </div>
+        </div>
+
+        <!-- ===== заглушка для роли Member ===== -->
+        <div class="card" id="memberStub" style="display:none; padding:32px; text-align:center;">
+            <h2 style="margin-bottom:8px;">Привет, <span id="memberStubName">клиент</span>!</h2>
+            <p class="empty-row" style="padding:0;">Личный кабинет клиента в разработке — здесь появится твой профиль, тренер и записи на тренировки.</p>
+        </div>
+
+        <div id="mainArea">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="trainers">Trainers</button>
+                <button class="tab-btn" data-tab="members">Members</button>
+                <button class="tab-btn admin-only" data-tab="users">Пользователи</button>
+            </div>
+
+            <!-- ===== Trainers ===== -->
+            <div class="panel active" id="panel-trainers">
+                <div class="toolbar">
+                    <span class="who" id="trainersCount"></span>
+                    <button class="primary small admin-only" id="trainerAddToggle">+ Добавить тренера</button>
+                </div>
+
+                <div class="entity-form-wrap" id="trainerFormWrap">
+                    <form id="trainerForm" class="entity-form">
+                        <input type="hidden" id="trainerEditId">
+                        <label class="field">ФИО <input type="text" id="trainerFullName" required></label>
+                        <label class="field">Возраст <input type="number" id="trainerAge" min="20" max="70" required></label>
+                        <label class="field">Стаж (лет) <input type="number" id="trainerExperience" min="0" max="50" required></label>
+                        <button type="submit" class="primary small">Сохранить</button>
+                        <button type="button" class="small" id="trainerCancelEdit">Отмена</button>
+                        <div class="form-error" id="trainerFormError"></div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div id="trainersBlock" class="empty-row">загрузка...</div>
+                </div>
+            </div>
+
+            <!-- ===== Members ===== -->
+            <div class="panel" id="panel-members">
+                <div class="toolbar">
+                    <span class="who" id="membersCount"></span>
+                    <button class="primary small admin-only" id="memberAddToggle">+ Добавить клиента</button>
+                </div>
+
+                <div class="entity-form-wrap" id="memberFormWrap">
+                    <form id="memberForm" class="entity-form">
+                        <input type="hidden" id="memberEditId">
+                        <label class="field">ФИО <input type="text" id="memberFullName" required></label>
+                        <label class="field">Возраст <input type="number" id="memberAge" min="14" max="80" required></label>
+                        <label class="field">Email <input type="email" id="memberEmail" required></label>
+                        <label class="field">TrainerId <input type="number" id="memberTrainerId"></label>
+                        <button type="submit" class="primary small">Сохранить</button>
+                        <button type="button" class="small" id="memberCancelEdit">Отмена</button>
+                        <div class="form-error" id="memberFormError"></div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div id="membersBlock" class="empty-row">загрузка...</div>
+                </div>
+            </div>
+
+            <!-- ===== Users (только Admin) — регистрация новых аккаунтов ===== -->
+            <div class="panel" id="panel-users">
+                <div class="card" style="padding:16px;">
+                    <h3 style="margin-bottom:12px;">Создать пользователя</h3>
+                    <form id="userForm" class="entity-form">
+                        <label class="field">Username <input type="text" id="newUsername" required></label>
+                        <label class="field">Пароль <input type="password" id="newPassword" required></label>
+                        <label class="field">
+                            Роль
+                            <select id="newRole">
+                                <option value="Trainer" selected>Trainer</option>
+                                <option value="Member">Member</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </label>
+                        <button type="submit" class="primary small">Создать</button>
+                        <div class="form-error" id="userFormError"></div>
+                    </form>
+                    <div id="userFormSuccess" style="color:var(--accent); font-size:12.5px; margin-top:8px;"></div>
+                </div>
+            </div>
+
+            <details class="debug">
+                <summary>Debug — последний ответ сервера</summary>
+                <pre id="debug">—</pre>
+            </details>
+        </div>
+
+    </div>
+
+    <script>
+        const debugEl = document.getElementById('debug');
+
+        let accessToken = localStorage.getItem('accessToken');
+        if (!accessToken) {
+            window.location.href = '/index.html';
+        }
+
+        // ---------- декодирование JWT: имя + роль ----------
+        function decodeJwtPayload(token) {
+            try {
+                const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(atob(base64));
+            } catch {
+                return null;
+            }
+        }
+
+        const tokenPayload = decodeJwtPayload(accessToken) || {};
+        const myName =
+            tokenPayload.unique_name || tokenPayload.name ||
+            tokenPayload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
+            tokenPayload.sub || '';
+
+        let myRole =
+            tokenPayload.role || tokenPayload.roles ||
+            tokenPayload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+        if (Array.isArray(myRole)) myRole = myRole[0];
+
+        if (myName) document.getElementById('whoAmI').textContent = myName;
+
+        // ---------- применяем роль к интерфейсу ----------
+        function applyRoleToUI() {
+            if (myRole === 'Member') {
+                document.getElementById('mainArea').style.display = 'none';
+                document.getElementById('memberStub').style.display = 'block';
+                document.getElementById('memberStubName').textContent = myName || 'клиент';
+                return false; // дальше грузить списки не нужно
+            }
+
+            if (myRole !== 'Admin') {
+                // Trainer (и вообще всё, что не Admin) — только просмотр
+                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+            }
+            return true;
+        }
+
+        const canManage = () => myRole === 'Admin';
+        const shouldLoadData = applyRoleToUI();
+
+        // ---------- табы ----------
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // ---------- токены / запросы ----------
+        async function refreshAccessToken() {
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (!refreshToken) return false;
+            try {
+                const response = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+                if (!response.ok) return false;
+                const data = await response.json().catch(() => null);
+                if (!data || !data.accessToken) return false;
+                accessToken = data.accessToken;
+                localStorage.setItem('accessToken', data.accessToken);
+                if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        function logoutAndRedirect() {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            window.location.href = '/index.html';
+        }
+
+        async function apiRequest(method, path, body, allowRefresh = true) {
+            const options = { method, headers: { 'Authorization': 'Bearer ' + accessToken } };
+            if (body !== undefined) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(path, options);
+
+            if (response.status === 401) {
+                if (allowRefresh) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) return apiRequest(method, path, body, false);
+                }
+                logoutAndRedirect();
+                return null;
+            }
+
+            const text = await response.text();
+            let data = null;
+            if (text) {
+                try { data = JSON.parse(text); } catch { data = text; }
+            }
+
+            debugEl.textContent =
+                `${method} ${path} -> ${response.status}\n\n` +
+                (data !== null ? JSON.stringify(data, null, 2) : '(пустой ответ)');
+
+            if (!response.ok) {
+                throw new Error(typeof data === 'string' ? data : `${response.status} ${response.statusText}`);
+            }
+            return data;
+        }
+
+        const apiGet = (path) => apiRequest('GET', path);
+
+        function renderTable(container, items, columns, onEdit, onDelete) {
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div class="empty-row">пока пусто</div>';
+                return;
+            }
+            const headerRow = columns.map(c => `<th>${c.label}</th>`).join('') + (canManage() ? '<th></th>' : '');
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr>${headerRow}</tr></thead><tbody></tbody>`;
+            const tbody = table.querySelector('tbody');
+
+            items.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = columns.map(c => `<td>${item[c.key] ?? ''}</td>`).join('');
+
+                if (canManage()) {
+                    const actionsTd = document.createElement('td');
+                    actionsTd.className = 'actions';
+
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'small';
+                    editBtn.textContent = 'Изменить';
+                    editBtn.addEventListener('click', () => onEdit(item));
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'small danger';
+                    deleteBtn.textContent = 'Удалить';
+                    deleteBtn.addEventListener('click', () => onDelete(item));
+
+                    actionsTd.appendChild(editBtn);
+                    actionsTd.appendChild(deleteBtn);
+                    tr.appendChild(actionsTd);
+                }
+
+                tbody.appendChild(tr);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(table);
+        }
+
+        function toggleForm(wrapId, open) {
+            document.getElementById(wrapId).classList.toggle('open', open);
+        }
+
+        // ---------- Trainers ----------
+
+        async function loadTrainers() {
+            const container = document.getElementById('trainersBlock');
+            try {
+                const result = await apiGet('/api/trainers?page=1');
+                if (!result) return;
+                document.getElementById('trainersCount').textContent =
+                    result.totalCount != null ? `${result.totalCount} всего` : '';
+                renderTable(container, result.items, [
+                    { key: 'id', label: 'Id' },
+                    { key: 'fullName', label: 'ФИО' },
+                    { key: 'age', label: 'Возраст' },
+                    { key: 'experienceYears', label: 'Стаж' }
+                ], editTrainer, deleteTrainer);
+            } catch (err) {
+                container.innerHTML = `<div class="empty-row">ошибка загрузки: ${err.message}</div>`;
+            }
+        }
+
+        function editTrainer(trainer) {
+            document.getElementById('trainerEditId').value = trainer.id;
+            document.getElementById('trainerFullName').value = trainer.fullName ?? '';
+            document.getElementById('trainerAge').value = trainer.age ?? '';
+            document.getElementById('trainerExperience').value = trainer.experienceYears ?? '';
+            toggleForm('trainerFormWrap', true);
+        }
+
+        function resetTrainerForm() {
+            document.getElementById('trainerForm').reset();
+            document.getElementById('trainerEditId').value = '';
+            document.getElementById('trainerFormError').textContent = '';
+            toggleForm('trainerFormWrap', false);
+        }
+
+        async function deleteTrainer(trainer) {
+            if (!confirm(`Удалить тренера "${trainer.fullName}" (Id ${trainer.id})?`)) return;
+            try {
+                await apiRequest('DELETE', `/api/trainers/${trainer.id}`);
+                loadTrainers();
+            } catch (err) {
+                alert('Не удалось удалить: ' + err.message);
+            }
+        }
+
+        document.getElementById('trainerAddToggle')?.addEventListener('click', () => {
+            const wrap = document.getElementById('trainerFormWrap');
+            if (wrap.classList.contains('open')) { resetTrainerForm(); }
+            else { toggleForm('trainerFormWrap', true); }
+        });
+        document.getElementById('trainerCancelEdit').addEventListener('click', resetTrainerForm);
+
+        document.getElementById('trainerForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('trainerFormError');
+            errorEl.textContent = '';
+            const editId = document.getElementById('trainerEditId').value;
+            const dto = {
+                fullName: document.getElementById('trainerFullName').value,
+                age: Number(document.getElementById('trainerAge').value),
+                experienceYears: Number(document.getElementById('trainerExperience').value)
+            };
+            try {
+                if (editId) await apiRequest('PUT', `/api/trainers/${editId}`, dto);
+                else await apiRequest('POST', '/api/trainers', dto);
+                resetTrainerForm();
+                loadTrainers();
+            } catch (err) {
+                errorEl.textContent = err.message;
+            }
+        });
+
+        // ---------- Members ----------
+
+        async function loadMembers() {
+            const container = document.getElementById('membersBlock');
+            try {
+                const result = await apiGet('/api/members?page=1');
+                if (!result) return;
+                document.getElementById('membersCount').textContent =
+                    result.totalCount != null ? `${result.totalCount} всего` : '';
+                renderTable(container, result.items, [
+                    { key: 'id', label: 'Id' },
+                    { key: 'fullName', label: 'ФИО' },
+                    { key: 'age', label: 'Возраст' },
+                    { key: 'email', label: 'Email' },
+                    { key: 'trainerId', label: 'TrainerId' }
+                ], editMember, deleteMember);
+            } catch (err) {
+                container.innerHTML = `<div class="empty-row">ошибка загрузки: ${err.message}</div>`;
+            }
+        }
+
+        function editMember(member) {
+            document.getElementById('memberEditId').value = member.id;
+            document.getElementById('memberFullName').value = member.fullName ?? '';
+            document.getElementById('memberAge').value = member.age ?? '';
+            document.getElementById('memberEmail').value = member.email ?? '';
+            document.getElementById('memberTrainerId').value = member.trainerId ?? '';
+            toggleForm('memberFormWrap', true);
+        }
+
+        function resetMemberForm() {
+            document.getElementById('memberForm').reset();
+            document.getElementById('memberEditId').value = '';
+            document.getElementById('memberFormError').textContent = '';
+            toggleForm('memberFormWrap', false);
+        }
+
+        async function deleteMember(member) {
+            if (!confirm(`Удалить клиента "${member.fullName}" (Id ${member.id})?`)) return;
+            try {
+                await apiRequest('DELETE', `/api/members/${member.id}`);
+                loadMembers();
+            } catch (err) {
+                alert('Не удалось удалить: ' + err.message);
+            }
+        }
+
+        document.getElementById('memberAddToggle')?.addEventListener('click', () => {
+            const wrap = document.getElementById('memberFormWrap');
+            if (wrap.classList.contains('open')) { resetMemberForm(); }
+            else { toggleForm('memberFormWrap', true); }
+        });
+        document.getElementById('memberCancelEdit').addEventListener('click', resetMemberForm);
+
+        document.getElementById('memberForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('memberFormError');
+            errorEl.textContent = '';
+            const editId = document.getElementById('memberEditId').value;
+            const trainerIdValue = document.getElementById('memberTrainerId').value;
+            const dto = {
+                fullName: document.getElementById('memberFullName').value,
+                age: Number(document.getElementById('memberAge').value),
+                email: document.getElementById('memberEmail').value,
+                trainerId: trainerIdValue ? Number(trainerIdValue) : null
+            };
+            try {
+                if (editId) await apiRequest('PUT', `/api/members/${editId}`, dto);
+                else await apiRequest('POST', '/api/members', dto);
+                resetMemberForm();
+                loadMembers();
+            } catch (err) {
+                errorEl.textContent = err.message;
+            }
+        });
+
+        // ---------- Users (регистрация, только Admin) ----------
+
+        document.getElementById('userForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('userFormError');
+            const successEl = document.getElementById('userFormSuccess');
+            errorEl.textContent = '';
+            successEl.textContent = '';
+
+            const dto = {
+                username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value,
+                role: document.getElementById('newRole').value
+            };
+
+            try {
+                await apiRequest('POST', '/api/auth/register', dto);
+                successEl.textContent = `Пользователь "${dto.username}" (${dto.role}) создан`;
+                document.getElementById('userForm').reset();
+            } catch (err) {
+                errorEl.textContent = err.message;
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', logoutAndRedirect);
+
+        if (shouldLoadData) {
+            loadTrainers();
+            loadMembers();
+        }
+    </script>
+
+</body>
+</html>

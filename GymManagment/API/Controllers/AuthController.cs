@@ -11,7 +11,7 @@ namespace GymManagment.API.Controllers
     [ApiController]
 
     [Route("api/auth")]
-    [AllowAnonymous]
+   
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -22,7 +22,7 @@ namespace GymManagment.API.Controllers
         }
 
         [HttpPost("register")]
-
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> RegisterAsync([FromBody] RegisterDto dto)
         {
 
@@ -37,6 +37,7 @@ namespace GymManagment.API.Controllers
             return Ok();
             }
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> LoginAsync([FromBody] LoginDto dto)
         {
             var login = await _authService.LoginAsync(dto);
@@ -45,7 +46,7 @@ namespace GymManagment.API.Controllers
 
         }
         [HttpPost("refresh")]
-        
+        [AllowAnonymous]
         public async Task<IActionResult> RefreshAsync([FromBody] RefreshRequestDto dto)
         {
             var refresh = await _authService.RefreshTokenAsync(dto);
@@ -54,6 +55,7 @@ namespace GymManagment.API.Controllers
         }
 
         [HttpPost("logout")]
+        [AllowAnonymous]
         public async Task<IActionResult> LogoutAsync([FromBody] RefreshRequestDto dto)
         {
             var result = await _authService.LogoutAsync(dto);
