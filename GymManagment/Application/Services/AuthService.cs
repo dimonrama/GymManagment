@@ -12,6 +12,8 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using RabbitMQ.Client;
+using System.Text.Json;
 
 
 namespace GymManagment.Application.Services
@@ -21,11 +23,13 @@ namespace GymManagment.Application.Services
         private readonly GymDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<AuthService> _logger;
-        public AuthService(GymDbContext context, IConfiguration config, ILogger<AuthService> logger )
+        private readonly IConnection _rabbitConnection;
+        public AuthService(GymDbContext context, IConfiguration config, ILogger<AuthService> logger, IConnection rabbitConnection)
         {
             _context = context;
             _config = config;
             _logger = logger;
+            _rabbitConnection = rabbitConnection;
         }
 
         public async Task<Result> RegisterAsync(RegisterDto dto)
@@ -58,6 +62,7 @@ namespace GymManagment.Application.Services
                 return Result.Fail("Не удалось создать пользователя", Result.ErrorTypes.ServerError);
             }
             _logger.LogInformation("Успешная регистрация: {Username}", dto.Username);
+            await PublishWelcomeMessageAsync(user.Username);
             return Result.Ok();
         }
 
@@ -183,6 +188,31 @@ namespace GymManagment.Application.Services
             rng.GetBytes(randomBytes);
             return Convert.ToBase64String(randomBytes);
         }
+        private async Task PublishWelcomeMessageAsync(string username)
+        {
+         
+            using var channel = await _rabbitConnection.CreateChannelAsync();
 
+            
+            await channel.QueueDeclareAsync(
+                queue: "welcome-notifications",
+                durable: true,      
+                exclusive: false,    
+                autoDelete: false,   
+                arguments: null);
+
+         
+            var message = new { Username = username, RegisteredAtUtc = DateTime.UtcNow };
+            string json = JsonSerializer.Serialize(message);
+            byte[] body = Encoding.UTF8.GetBytes(json);
+
+           
+            await channel.BasicPublishAsync(
+                exchange: "",
+                routingKey: "welcome-notifications",
+                body: body);
+
+            _logger.LogInformation("Сообщение о регистрации отправлено в очередь: {Username}", username);
+        }
     }
 }

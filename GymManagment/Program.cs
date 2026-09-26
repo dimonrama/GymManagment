@@ -7,6 +7,7 @@ using GymManagment.Application.Mappings;
 using GymManagment.Application.Repositories;
 using GymManagment.Application.Services;
 using GymManagment.Application.Validators;
+using GymManagment.Application.Workers;
 using GymManagment.Domain.DTO;
 using GymManagment.Domain.Models;
 using GymManagment.Infrastructure.Data;
@@ -14,7 +15,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using RabbitMQ.Client;
+using StackExchange.Redis;
 using System.Text;
+using Telegram.Bot;
+
+
+
+
 
 
 
@@ -24,6 +32,36 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<GymDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddMemoryCache();
+
+
+builder.Services.AddHostedService<WelcomeNotificationWorker>();
+builder.Services.AddHostedService<TelegramBotWorker>();
+
+builder.Services.AddSingleton<ITelegramBotClient>(sp =>
+{
+    var token = builder.Configuration["TelegramBot:Token"];
+    return new TelegramBotClient(token!);
+});
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"];
+    return ConnectionMultiplexer.Connect(connectionString);
+});
+
+builder.Services.AddSingleton<IConnectionFactory>(sp =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("RabbitMQ")
+        ?? builder.Configuration["RabbitMQ:ConnectionString"];
+    return new ConnectionFactory { Uri = new Uri(connectionString!) };
+});
+
+builder.Services.AddSingleton<IConnection>(sp =>
+{
+    var factory = sp.GetRequiredService<IConnectionFactory>();
+    return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+});
 
 builder.Services.AddScoped<ITrainerService, TrainerService>();
 builder.Services.AddScoped<IMemberService, MemberService>();

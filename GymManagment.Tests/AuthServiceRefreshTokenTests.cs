@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using RabbitMQ.Client;
 
 namespace GymManagment.Tests
 {
@@ -24,8 +25,9 @@ namespace GymManagment.Tests
 
             var config = GetFakeConfiguration();
             var logger = new Mock<ILogger<AuthService>>().Object;
+            var rabbitConnection = new Mock<IConnection>().Object; 
 
-            _authService = new AuthService(_context, config, logger);
+            _authService = new AuthService(_context, config, logger, rabbitConnection);
         }
 
         private GymDbContext GetInMemoryContext()
