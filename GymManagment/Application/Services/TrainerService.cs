@@ -120,5 +120,12 @@ namespace GymManagment.Application.Services
             _cacheVersion++;
             return Result.Ok();
         }
+        public async Task<TrainerDto?> GetTrainerByUserIdAsync(int userId)
+        {
+            var trainer = await _trainerRepository.GetByUserIdAsync(userId);
+            if (trainer == null) return null;
+            return _mapper.Map<TrainerDto>(trainer);
+        
+             }
     }
 }

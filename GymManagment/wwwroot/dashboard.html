@@ -94,6 +94,12 @@
                                 <option value="Admin">Admin</option>
                             </select>
                         </label>
+                        <!-- поля профиля: показываются в зависимости от роли -->
+                        <label class="field profile-field profile-trainer profile-member">ФИО <input type="text" id="newFullName"></label>
+                        <label class="field profile-field profile-trainer profile-member">Возраст <input type="number" id="newAge"></label>
+                        <label class="field profile-field profile-member">Email <input type="email" id="newEmail"></label>
+                        <label class="field profile-field profile-member">TrainerId (необязательно) <input type="number" id="newTrainerId"></label>
+                        <label class="field profile-field profile-trainer">Стаж (лет) <input type="number" id="newExperience"></label>
                         <button type="submit" class="primary small">Создать</button>
                         <div class="form-error" id="userFormError"></div>
                     </form>
@@ -226,7 +232,10 @@
                 (data !== null ? JSON.stringify(data, null, 2) : '(пустой ответ)');
 
             if (!response.ok) {
-                throw new Error(typeof data === 'string' ? data : `${response.status} ${response.statusText}`);
+                let message = `${response.status} ${response.statusText}`;
+                if (typeof data === 'string') message = data;
+                else if (data && data.errors) message = Object.values(data.errors).flat().join('; ');
+                throw new Error(message);
             }
             return data;
         }
@@ -427,6 +436,22 @@
 
         // ---------- Users (регистрация, только Admin) ----------
 
+        const roleSelect = document.getElementById('newRole');
+
+        // показываем только те поля профиля, которые нужны выбранной роли
+        function updateProfileFields() {
+            const role = roleSelect.value.toLowerCase();
+            document.querySelectorAll('.profile-field').forEach(label => {
+                const visible = label.classList.contains('profile-' + role);
+                label.style.display = visible ? '' : 'none';
+                const input = label.querySelector('input');
+                input.required = visible && input.id !== 'newTrainerId';
+                if (!visible) input.value = '';
+            });
+        }
+        roleSelect.addEventListener('change', updateProfileFields);
+        updateProfileFields();
+
         document.getElementById('userForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const errorEl = document.getElementById('userFormError');
@@ -434,16 +459,33 @@
             errorEl.textContent = '';
             successEl.textContent = '';
 
+            const role = roleSelect.value;
             const dto = {
                 username: document.getElementById('newUsername').value,
                 password: document.getElementById('newPassword').value,
-                role: document.getElementById('newRole').value
+                role
             };
+
+            if (role === 'Member' || role === 'Trainer') {
+                dto.fullName = document.getElementById('newFullName').value;
+                dto.age = Number(document.getElementById('newAge').value);
+            }
+            if (role === 'Member') {
+                dto.email = document.getElementById('newEmail').value;
+                const trainerId = document.getElementById('newTrainerId').value;
+                dto.trainerId = trainerId ? Number(trainerId) : null;
+            }
+            if (role === 'Trainer') {
+                dto.experienceYears = Number(document.getElementById('newExperience').value);
+            }
 
             try {
                 await apiRequest('POST', '/api/auth/register', dto);
-                successEl.textContent = `Пользователь "${dto.username}" (${dto.role}) создан`;
+                successEl.textContent = `Пользователь "${dto.username}" (${role}) создан`;
                 document.getElementById('userForm').reset();
+                updateProfileFields();
+                loadTrainers();
+                loadMembers();
             } catch (err) {
                 errorEl.textContent = err.message;
             }

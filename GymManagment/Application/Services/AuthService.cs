@@ -34,14 +34,33 @@ namespace GymManagment.Application.Services
 
         public async Task<Result> RegisterAsync(RegisterDto dto)
         {
-            bool existName = await _context.Users.AnyAsync(u=>u.Username == dto.Username);
-            if (existName) { _logger.LogWarning("Имя занято: {Username}", dto.Username);
-                return Result.Fail("Такое имя уже занято", Result.ErrorTypes.Conflict); }
+            bool existName = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+            if (existName)
+            {
+                _logger.LogWarning("Имя занято: {Username}", dto.Username);
+                return Result.Fail("Такое имя уже занято", Result.ErrorTypes.Conflict);
+            }
 
             if (!Enum.TryParse<UserRole>(dto.Role, out var role))
             {
-                _logger.LogWarning("Несовпадение роли: {Role}", dto.Role); 
+                _logger.LogWarning("Несовпадение роли: {Role}", dto.Role);
                 return Result.Fail("Роль должна быть равна Trainer,Member или Admin", Result.ErrorTypes.ValidationError);
+            }
+
+            // Проверки профиля клиента делаем ДО записи чего-либо в БД
+            if (role == UserRole.Member)
+            {
+                if (await _context.Members.AnyAsync(m => m.Email == dto.Email))
+                {
+                    _logger.LogWarning("Почта занята: {Email}", dto.Email);
+                    return Result.Fail("Такая почта уже зарегистрирована", Result.ErrorTypes.Conflict);
+                }
+
+                if (dto.TrainerId.HasValue && !await _context.Trainers.AnyAsync(t => t.Id == dto.TrainerId.Value))
+                {
+                    _logger.LogWarning("Тренер не найден: {TrainerId}", dto.TrainerId);
+                    return Result.Fail($"Тренер с Id {dto.TrainerId} не найден", Result.ErrorTypes.ValidationError);
+                }
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
@@ -52,16 +71,40 @@ namespace GymManagment.Application.Services
                 PasswordHash = passwordHash,
                 Role = role
             };
-
             await _context.Users.AddAsync(user);
 
+            // Профиль создаём через навигационное свойство User: EF сам проставит UserId при сохранении
+            if (role == UserRole.Member)
+            {
+                await _context.Members.AddAsync(new Member
+                {
+                    FullName = dto.FullName!,
+                    Age = dto.Age!.Value,
+                    Email = dto.Email!,
+                    TrainerId = dto.TrainerId,
+                    User = user
+                });
+            }
+            else if (role == UserRole.Trainer)
+            {
+                await _context.Trainers.AddAsync(new Trainer
+                {
+                    FullName = dto.FullName!,
+                    Age = dto.Age!.Value,
+                    ExperienceYears = dto.ExperienceYears!.Value,
+                    User = user
+                });
+            }
+
+            // Один SaveChanges = одна транзакция: сохранится и User, и профиль, либо ничего
             var success = await _context.SaveChangesAsync() > 0;
             if (!success)
             {
                 _logger.LogError("НЕ удалось сохранить в БД: {Username}", dto.Username);
                 return Result.Fail("Не удалось создать пользователя", Result.ErrorTypes.ServerError);
             }
-            _logger.LogInformation("Успешная регистрация: {Username}", dto.Username);
+
+            _logger.LogInformation("Успешная регистрация: {Username}, роль {Role}", dto.Username, role);
             await PublishWelcomeMessageAsync(user.Username);
             return Result.Ok();
         }
@@ -213,6 +256,32 @@ namespace GymManagment.Application.Services
                 body: body);
 
             _logger.LogInformation("Сообщение о регистрации отправлено в очередь: {Username}", username);
+        }
+
+       public async Task<Result> LinkTelegramAsync(string username, string password, long chatId)
+        {
+            var client = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (client == null)
+            {
+                _logger.LogWarning("Клиент не найден: {Username}", username);
+                return Result.Fail($"Клиент не найден {username}", Result.ErrorTypes.NotFound) ;
+            }
+            bool pass = BCrypt.Net.BCrypt.Verify(password, client.PasswordHash);
+            if (!pass) { _logger.LogWarning("Неверный пароль: {Username}", username); return Result.Fail($"Попытка входа с неправильным паролем {username}", Result.ErrorTypes.ValidationError); }
+            _logger.LogInformation("Пользователь авторизован: {Username}", username);
+            var chatClient = await _context.Users.FirstOrDefaultAsync(c => c.TelegramChatId == chatId);
+            if (chatClient != null && chatClient.Id != client.Id)
+            {
+                chatClient.TelegramChatId = null;
+            }
+            client.TelegramChatId = chatId;
+            await _context.SaveChangesAsync();
+
+           return Result.Ok();
+        }
+        public async Task<User?> GetUserByTelegramChatIdAsync(long chatId)
+        {
+            return await _context.Users.AsNoTracking().FirstOrDefaultAsync(u=>u.TelegramChatId == chatId);
         }
     }
 }

@@ -103,5 +103,13 @@ namespace GymManagment.Application.Services
             }
             return Result.Ok();
         }
+        public async Task<MemberDto?> GetMemberByUserIdAsync(int userId)
+        {
+            var member = await _memberRepository.GetByUserIdAsync(userId);
+            if (member == null)
+                return null;
+
+            return _mapper.Map<MemberDto>(member);
+        }
     }
 }

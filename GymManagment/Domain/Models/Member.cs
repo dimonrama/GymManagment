@@ -11,8 +11,10 @@ namespace GymManagment.Domain.Models
         [Required]
         [MaxLength(100)]
         [EmailAddress]
-        public string Email { get; set; } = string.Empty;   // ← добавили
+        public string Email { get; set; } = string.Empty;   
         public Trainer? Trainer {get; set;}
 
+        public int? UserId { get; set; }
+        public User? User { get; set; }
     }
 }

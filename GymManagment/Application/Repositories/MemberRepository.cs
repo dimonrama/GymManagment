@@ -91,5 +91,10 @@ namespace GymManagment.Application.Repositories
             return await _context.Members
                 .AnyAsync(m => m.Email == email);
         }
+
+        public async Task<Member?> GetByUserIdAsync(int userId)
+        {
+            return await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.UserId == userId);
+        }
     }
 }

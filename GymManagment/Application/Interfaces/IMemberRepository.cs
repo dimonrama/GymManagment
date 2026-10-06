@@ -10,5 +10,6 @@ namespace GymManagment.Application.Repositories
         Task<PagedResult<Member>> GetAllAsync(int page, int? trainerId);
         Task <bool> IsEmailExistsAsync(string email);
         Task<Member?> GetByIdTrackedAsync(int id);
+        Task<Member?> GetByUserIdAsync(int userId);
     }
 }

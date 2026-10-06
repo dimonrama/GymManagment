@@ -11,5 +11,7 @@ namespace GymManagment.Application.Interfaces
         Task<Result> CreateTrainerAsync(TrainerDto trainerDto);
         Task<Result> UpdateTrainerAsync(int id, TrainerDto trainerDto);
         Task<Result> DeleteTrainerAsync(int id);
+
+        Task<TrainerDto?> GetTrainerByUserIdAsync(int userId);
     }
 }

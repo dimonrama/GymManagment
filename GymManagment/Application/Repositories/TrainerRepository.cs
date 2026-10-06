@@ -78,6 +78,9 @@ namespace GymManagment.Application.Repositories
             return await _context.Members.AsNoTracking()
                 .AnyAsync(m => m.TrainerId == trainerId);
         }
-
+        public async Task<Trainer?> GetByUserIdAsync(int userId)
+        {
+            return await _context.Trainers.AsNoTracking().FirstOrDefaultAsync(t => t.UserId == userId);
+        }
     }
 }

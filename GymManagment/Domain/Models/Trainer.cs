@@ -12,6 +12,7 @@ namespace GymManagment.Domain.Models
 
         public List<Member>? Members { get; set; }  = new List<Member>();
 
-
+        public int? UserId { get; set; }
+        public User? User { get; set; }
     }
 }
