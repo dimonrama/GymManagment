@@ -120,8 +120,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]))
         };
     });
-var app = builder.Build();
 
+var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<GymDbContext>();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment()) {
     app.UseSwagger();
